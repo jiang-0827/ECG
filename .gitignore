@@ -19,3 +19,18 @@ __pycache__/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# ==== STM32 / Keil MDK 编译产物 ====
+STM32/**/Objects/
+STM32/**/Listings/
+*.o
+*.d
+*.crf
+*.axf
+*.dep
+*.lnp
+*.lst
+*.map
+*.bak*
+*.uvgui*
+build_log.txt

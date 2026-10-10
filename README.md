@@ -9,6 +9,7 @@
 - **逐点流式心率检测**：4 秒滑窗自适应门限 + R 峰状态机 + RR 中位数，实测 60/120/150/240 bpm 误差 0%；
 - **导联脱落检测**：独立 ADC2 通道 + 100 ms 对称去抖，脱落时心率自动清零（监护规范）；
 - **VOFA+ 四通道实时波形**：原始码值 / 滤波值 / 心率 / 导联状态，250 Hz 刷新；
+- **完整可编译工程**：`STM32/` 是 Keil MDK 工程，克隆后直接打开即可编译烧录；
 - **算法可追溯**：MATLAB 设计 → C 实现 → 逐点对拍（误差达 float32 舍入极限 ~1e-5）。
 
 ## 系统架构
@@ -42,23 +43,26 @@
 
 ```
 ECGDynamicPrj/
-├── EcgMcuC/                  # ★ STM32F407 C 算法（部署到 Keil 工程 Alg/）
-│   ├── ecg_config.h          #   全部物理量与算法参数的唯一定义处
-│   ├── ecg_filter.c/.h       #   三级滤波链：去直流→50Hz陷波→40Hz FIR
-│   ├── ecg_coeffs.c/.h       #   滤波器系数（gen_ecg_coeffs.m 自动生成，勿手改）
-│   ├── ecg_heart.c/.h        #   逐点流式心率检测
-│   ├── ecg_leadoff.c/.h      #   导联脱落检测
-│   ├── gen_ecg_coeffs.m      #   由 MATLAB 设计器生成系数
-│   ├── verify/               #   MATLAB↔C 逐点对拍验证（含 Python float32 复刻）
+├── STM32/                    # ★ 完整 STM32F407 Keil 工程（克隆即可编译烧录）
+│   ├── Alg/                  #   心电算法源码：ecg_config / ecg_filter / ecg_coeffs
+│   │                         #                / ecg_heart / ecg_leadoff（.c/.h）
+│   ├── app/  board/  bsp/    #   应用层 / 板级支持 / BSP 驱动
+│   ├── HW/  module/  tools/  #   硬件外设 / 功能模块 / 工具
+│   ├── ARM/  libraries/      #   CMSIS 内核 / STM32F4 标准外设库
+│   ├── project/MDK(V5)/      #   Keil 工程 Project.uvprojx（已排除编译产物）
+│   └── README.md             #   工程自带说明
+├── MATLAB/
+│   ├── Host/                 #   上位机（GUIDE）：采集/滤波/心率/频谱/回放
+│   └── Sim/                  #   滤波器设计、逐点递推仿真、系数生成
+│       ├── ecg_config.m · design_ecg_filters.m
+│       ├── biquad_df2t_step.m · fir_circ_step.m
+│       └── gen_ecg_coeffs.m  #   生成 ecg_coeffs.c/.h
+├── Tools/
 │   ├── patch_*.py            #   历次工程修改补丁脚本（留档）
-│   └── 心电通道开发文档.md    #   详细开发纪实 / 踩坑档案 / 参数表
-├── EcgMcuSim/                # MATLAB 滤波器设计与逐点递推仿真
-│   ├── ecg_config.m          #   配置（与 ecg_config.h 对应）
-│   ├── design_ecg_filters.m  #   滤波器设计（butter/fir1/Kaiser）
-│   ├── biquad_df2t_step.m    #   biquad DF2T 逐点递推
-│   └── fir_circ_step.m       #   FIR 环形缓冲逐点递推
-├── RecData/                  # 心电演示数据（csv）
-├── *.m / *.fig               # MATLAB 上位机（GUIDE）：采集/滤波/心率/频谱/回放
+│   └── verify/               #   MATLAB↔C 逐点对拍验证（含 Python float32 复刻）
+├── Data/                     # 心电演示数据（csv）
+├── Docs/
+│   └── 心电通道开发文档.md    #   开发纪实 / 踩坑档案 / 参数表
 ├── LICENSE
 └── README.md
 ```
@@ -107,7 +111,7 @@ ECGDynamicPrj/
 
 ### 2. 编译烧录
 
-将 `EcgMcuC/` 下的 `ecg_*.c/.h` 拷贝到 Keil 工程 `Alg/` 目录（**注意转 GBK 编码**），用 Keil MDK 打开工程 → Rebuild → Download（ST-Link，SWD 模式）。
+用 **Keil MDK（V5）** 打开 `STM32/project/MDK(V5)/Project.uvprojx` → Rebuild → Download（ST-Link，SWD 模式）。心电算法已在工程 `STM32/Alg/` 中配置完毕，克隆本仓库后无需额外拷贝即可编译。
 
 ### 3. VOFA+ 配置
 
@@ -117,9 +121,9 @@ ECGDynamicPrj/
 
 ## MATLAB 工具链
 
-- **滤波器设计 / 系数生成**：改 `EcgMcuSim/ecg_config.m` → 运行 `EcgMcuC/gen_ecg_coeffs.m` → 生成新的 `ecg_coeffs.h/.c` → 拷贝到 `Alg/`；
-- **逐点对拍验证**：`EcgMcuC/verify/run_verify.m`（生成双参考）+ `verify_python.py`（无编译器时的 float32 复刻对拍）；
-- **上位机**：根目录 `ECG.m` 等 GUIDE 程序，支持串口实时采集、CSV 离线回放、波形显示、滤波与心率/频谱分析。
+- **滤波器设计 / 系数生成**：改 `MATLAB/Sim/ecg_config.m` → 运行 `MATLAB/Sim/gen_ecg_coeffs.m` → 生成新的 `ecg_coeffs.h/.c` → 覆盖到 `STM32/Alg/`；
+- **逐点对拍验证**：`Tools/verify/run_verify.m`（生成双参考）+ `verify_python.py`（无编译器时的 float32 复刻对拍）；
+- **上位机**：`MATLAB/Host/ECG.m` 等 GUIDE 程序，支持串口实时采集、CSV 离线回放、波形显示、滤波与心率/频谱分析。
 
 ## 验收结果（对照《五参数验收标准》心电部分）
 
@@ -135,7 +139,7 @@ ECGDynamicPrj/
 
 完整的开发纪实、踩坑档案（F4 ADC DDS 陷阱、串口竞争、心率不应期演进）、参数表与备份说明见：
 
-**[`EcgMcuC/心电通道开发文档.md`](EcgMcuC/心电通道开发文档.md)**
+**[`Docs/心电通道开发文档.md`](Docs/心电通道开发文档.md)**
 
 ## License
 
