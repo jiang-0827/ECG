@@ -1,0 +1,18 @@
+# ==== 无关项目（桌面宠物 AI，非心电算法）====
+DesktopPetAI/
+Res/
+
+# ==== Python 缓存 ====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ==== MATLAB 临时/生成文件 ====
+*.asv
+*.m~
+
+# ==== 操作系统杂项 ====
+Thumbs.db
+Desktop.ini
+.DS_Store
